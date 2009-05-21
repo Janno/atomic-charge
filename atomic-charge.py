@@ -12,17 +12,22 @@ def gen_handshake(meta):
         return chr(19) + 'BitTorrent protocol' + chr(0)*8 + infohash
 
 def gen_bitfield(meta):
-        num = len(meta['info']['pieces']) / 20 // 8
-##        result = ""
-##        for x in reversed(xrange(int(math.ceil(math.log(num,2))))):
-##                result = result + chr(num / (2**x))
-##                num = num % (2**x)
-##        return result
-        return '\xFF'*num
-
-def gen_message(msgid, msg):
-        return struct.pack('>IBs', len(msg)+1, msgid, msg)
+        pieces = len(meta['info']['pieces']) / 20
+        num = int(math.ceil(pieces / 8.0))
+        result = list('\xFF'*num)
+        if pieces % 8:
+                #print 'result:', result
+                result[-1] = chr(ord(result[-1]) ^ (2**(8 - (pieces % 8))) - 1)
+                #print 'result:', result
         
+        return ''.join(result)
+
+def gen_message(msgid, msg = ''):
+        return struct.pack('>IB', len(msg)+1, msgid) + msg
+        
+def send(s, msg):
+        s.sendall(msg)
+        print ' ->', map(ord, msg)
 
 if __name__ == '__main__':
         from sys import argv
@@ -39,25 +44,40 @@ if __name__ == '__main__':
         sock = socket()
         sock.connect((argv[3], int(argv[4])))
         print "connected"
-        sock.sendall(gen_handshake(meta))
-        print "handshake sent"
-        resp = sock.recv(100)
+        id = '-AC-'+''.join(random.choice(printable) for x in xrange(17))
+        id = '-AC-&;"fmU-U3.@\6v+U'
+        print 'id: ', id
+        send(sock, gen_handshake(meta)+id + gen_message(5, gen_bitfield(meta)))
+        print "handshake sent + bitfield sent"
+        raw_input()
+        resp = sock.recv(68)
         if resp:
                 print "got a response"
                 if ord(resp[0]) == 19:
                         print 'peer-id:', resp[48:]
+                        print ' <-', map(ord, resp)
                         
                 else:
                         print "gibberish, exiting!"
                         exit()
-        id = ''.join(random.choice(printable) for x in xrange(12))
-        sock.sendall(gen_handshake(meta)+'AC-'+id)
-        sock.sendall(gen_message(5, gen_bitfield(meta)))
-        print gen_bitfield(meta)
+
+        #sock.sendall(gen_handshake(meta)+id)
+        #raw_input()
+        #print map(ord, sock.recv(100))
+        send(sock, gen_message(5, gen_bitfield(meta)))
+        send(sock, gen_message(5, gen_bitfield(meta)))
+        raw_input()
         print "bitfield sent"
+        send(sock, gen_message(0))
+        print "keep alive sent"
         while True:
-                resp = sock.recv(512)
-                if resp: print resp
+                resp = map(ord, sock.recv(512))
+                if resp:
+                        print ' <-', resp
+                        if resp[4] == 5:
+                                send(sock, gen_message(2))
+                                print "interested sent"
+                
                 
                 
 
