@@ -10,7 +10,6 @@ if __name__ == '__main__':
         from sys import argv
         #assert len(argv) == 4
 
-        argv[1] = 
         
         f = file(argv[1], 'rb')
         meta = bencode.bdecode(f.read())
