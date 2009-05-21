@@ -21,7 +21,7 @@ def gen_bitfield(meta):
         return '\xFF'*num
 
 def gen_message(msgid, msg):
-        return struct.pack('>iis', len(msg)+1, msgid ,msg)
+        return struct.pack('>IBs', len(msg)+1, msgid, msg)
         
 
 if __name__ == '__main__':
