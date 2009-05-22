@@ -44,7 +44,7 @@ if __name__ == '__main__':
         sock = socket()
         sock.connect((argv[3], int(argv[4])))
         print "connected"
-        id = '-AC-'+''.join(random.choice(printable) for x in xrange(17))
+        id = '-AC-'+''.join(random.choice(printable) for x in xrange(14))
         id = '-AC-&;"fmU-U3.@\6v+U'
         print 'id: ', id
         send(sock, gen_handshake(meta)+id + gen_message(5, gen_bitfield(meta)))
@@ -64,10 +64,9 @@ if __name__ == '__main__':
         #sock.sendall(gen_handshake(meta)+id)
         #raw_input()
         #print map(ord, sock.recv(100))
-        send(sock, gen_message(5, gen_bitfield(meta)))
-        send(sock, gen_message(5, gen_bitfield(meta)))
+        #send(sock, gen_message(5, gen_bitfield(meta)))
+        #print "bitfield sent"
         raw_input()
-        print "bitfield sent"
         send(sock, gen_message(0))
         print "keep alive sent"
         while True:
