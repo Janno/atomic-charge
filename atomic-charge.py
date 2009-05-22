@@ -65,19 +65,13 @@ if __name__ == '__main__':
                         print "gibberish, exiting!"
                         exit()
 
-        #sock.sendall(gen_handshake(meta)+id)
-        #raw_input()
-        #print map(ord, sock.recv(100))
-        #send(sock, gen_message(5, gen_bitfield(meta)))
-        #print "bitfield sent"
-        #raw_input()
-        #send(sock, gen_message(0))
-        #print "keep alive sent"
         while True:
                 resp = sock.recv(512)
                 if resp:
                         printhex(resp, '<- ')
-                        if resp[4] == chr(5):
+                        send(sock, gen_message(0))
+                        print "keep alive sent"
+                        if len(resp) > 4 and resp[4] == chr(5):
                                 print "got bitfield"
                                 send(sock, gen_message(2))
                                 print "interested sent"
@@ -88,6 +82,5 @@ if __name__ == '__main__':
 
 
         
-
 
 

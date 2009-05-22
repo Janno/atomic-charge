@@ -1,0 +1,3 @@
+RAND RANT:
+- the stupid protocol recommends torrents to be interpreted as a *single* byte streams. thus multi-file torrents are irritatingly regarded as a concatenation of the files *in order of their appearance in the metainfo*. lol, stupid.
+-- this renders torrents with a different file order incompatible with each other. this is, in our opinion, if we may say so, an INSULT to common sense. (and a design flaw in the mere BitTorrent Protocol itself!)
