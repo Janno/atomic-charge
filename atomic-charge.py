@@ -27,7 +27,11 @@ def gen_message(msgid, msg = ''):
         
 def send(s, msg):
         s.sendall(msg)
-        print ' ->', map(ord, msg)
+        printhex(msg, '-> ')
+def printhex(msg, prefix=''):
+        def gen_printhex(msg):
+                return ' '.join(["%2X" % ord(char) for char in msg])
+        print prefix + gen_printhex(msg)
 
 if __name__ == '__main__':
         from sys import argv
@@ -44,8 +48,8 @@ if __name__ == '__main__':
         sock = socket()
         sock.connect((argv[3], int(argv[4])))
         print "connected"
-        id = '-AC-'+''.join(random.choice(printable) for x in xrange(14))
-        id = '-AC-&;"fmU-U3.@\6v+U'
+        id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8))
+
         print 'id: ', id
         send(sock, gen_handshake(meta)+id + gen_message(5, gen_bitfield(meta)))
         print "handshake sent + bitfield sent"
@@ -55,7 +59,7 @@ if __name__ == '__main__':
                 print "got a response"
                 if ord(resp[0]) == 19:
                         print 'peer-id:', resp[48:]
-                        print ' <-', map(ord, resp)
+                        printhex(resp, '<- ')
                         
                 else:
                         print "gibberish, exiting!"
@@ -66,14 +70,15 @@ if __name__ == '__main__':
         #print map(ord, sock.recv(100))
         #send(sock, gen_message(5, gen_bitfield(meta)))
         #print "bitfield sent"
-        raw_input()
-        send(sock, gen_message(0))
-        print "keep alive sent"
+        #raw_input()
+        #send(sock, gen_message(0))
+        #print "keep alive sent"
         while True:
-                resp = map(ord, sock.recv(512))
+                resp = sock.recv(512)
                 if resp:
-                        print ' <-', resp
-                        if resp[4] == 5:
+                        printhex(resp, '<- ')
+                        if resp[4] == chr(5):
+                                print "got bitfield"
                                 send(sock, gen_message(2))
                                 print "interested sent"
                 
