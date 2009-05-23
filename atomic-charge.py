@@ -8,21 +8,29 @@ import math
 import random
 import bencode
 
-def parse(msg):
+def parse(sock):
     """
     returns (yieldwise): (id, msg) # :D
-    """
-    while msg:
-        assert len(msg) >= 4
-        msglen = struct.unpack('>I', msg[:4]) # "..PWP messages are encoded as a 4-byte big-endian number"
+    """    
+    while True:
+        #assert len(msg) >= 4
+        try:
+            temp = sock.recv(4) # read 4 bytes to know the length of the packet
+        except:
+            continue
+        
+        if not temp:
+            continue
+        msglen = int(struct.unpack('>I', temp)[0]) # "..PWP messages are encoded as a 4-byte big-endian number"
         if msglen == 0:
             # keep-alive, len 0
             yield (0, '')
-            msg = msg[4:]
         else:
-            msgid = msg[4]
-            yield (msgid, msg[4:4+msglen])
-            msg = msg[4+msglen:]
+            msg = sock.recv(msglen) # read msgid and msg
+            assert len(msg) == msglen
+            msgid, msg = struct.unpack('>B', msg[0])[0], msg[1:]
+            yield (msgid, msg)
+
 
 def gen_handshake(meta):
     """
@@ -79,13 +87,13 @@ if __name__ == '__main__':
     
     sock = socket()
     sock.connect((argv[3], int(argv[4])))
+    sock.settimeout(2)
     print "connected"
     id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8))
 
     print 'id: ', id
     send(sock, gen_handshake(meta)+id + gen_message(5, gen_bitfield(meta)))
     print "handshake sent + bitfield sent"
-    raw_input()
     resp = sock.recv(68)
     if resp:
         print "got a response"
@@ -97,14 +105,12 @@ if __name__ == '__main__':
             print "gibberish, exiting!"
             exit()
 
-    while True:
-        resp = sock.recv(512)
-        if resp:
-            printhex(resp, '<- ')
-            send(sock, gen_message(0))
-            print "keep alive sent"
-            if len(resp) > 4 and resp[4] == chr(5):
-                print "got bitfield"
+    for (msgid, msg) in parse(sock):
+        printhex(msg, '<- %s: ' % str(msgid))
+        send(sock, gen_message(0))
+        print "keep alive sent"
+        if msgid == 5:
+            print "got bitfield"
         
         
         
