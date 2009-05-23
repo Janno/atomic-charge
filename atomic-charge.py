@@ -1,7 +1,7 @@
 #!/usr/bin/python 
 
 from hashlib import sha1
-from socket import socket
+import socket
 from string import printable
 import struct
 import math
@@ -16,7 +16,7 @@ def parse(sock):
         #assert len(msg) >= 4
         try:
             temp = sock.recv(4) # read 4 bytes to know the length of the packet
-        except:
+        except socket.timeout:
             continue
         
         if not temp:
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     singlefile = ('length' in meta['info'].keys())
     print ("single-file" if singlefile else "multi-file") + " torrent"
     
-    sock = socket()
+    sock = socket.socket()
     sock.connect((argv[3], int(argv[4])))
     sock.settimeout(2)
     print "connected"
@@ -133,6 +133,10 @@ if __name__ == '__main__':
                 send(sock, gen_message(7, struct.pack('>II', piece, offset)+content), True)
                 print "sent piece"
                 f.close()
+        if msgid == 3:
+            print "received not interested"
+            print "exiting"
+            exit()
 
                 
                 
