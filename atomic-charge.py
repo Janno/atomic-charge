@@ -65,13 +65,17 @@ def gen_message(msgid, msg = ''):
     else:
         return struct.pack('>IB', len(msg)+1, msgid) + msg
     
-def send(s, msg):
+def send(s, msg, silent=False):
     s.sendall(msg)
-    printhex(msg, '-> ')
+    if not silent: printhex(msg, '-> ')
+    
 def printhex(msg, prefix=''):
     def gen_printhex(msg):
         return ' '.join(["%2X" % ord(char) for char in msg])
     print prefix + gen_printhex(msg)
+
+def abs2rel(index, offset):
+    pass
 
 if __name__ == '__main__':
     from sys import argv
@@ -82,8 +86,10 @@ if __name__ == '__main__':
     f = file(argv[1], 'rb')
     meta = bencode.bdecode(f.read())
     f.close()
-    
-    singlefile = ('md5sum' in meta['info'])
+
+    print meta['info'].keys()
+    singlefile = ('length' in meta['info'].keys())
+    print ("single-file" if singlefile else "multi-file") + " torrent"
     
     sock = socket()
     sock.connect((argv[3], int(argv[4])))
@@ -105,13 +111,31 @@ if __name__ == '__main__':
             print "gibberish, exiting!"
             exit()
 
+
     for (msgid, msg) in parse(sock):
         printhex(msg, '<- %s: ' % str(msgid))
         send(sock, gen_message(0))
         print "keep alive sent"
         if msgid == 5:
             print "got bitfield"
-        
+            send(sock, gen_message(1))
+            print "unchoke sent"
+        if msgid == 6:
+            print "got request"
+            piece, offset, length = struct.unpack('>III', msg)
+            print piece, offset, length
+            if singlefile:
+                f = file(argv[2], 'rb')
+                print "offset: %s" % (piece*meta['info']['piece length']+offset)
+                f.seek(piece*meta['info']['piece length']+offset)
+                content = f.read(length)
+                print "content length: %s" % len(content)
+                send(sock, gen_message(7, struct.pack('>II', piece, offset)+content), True)
+                print "sent piece"
+                f.close()
+
+                
+                
         
         
 
