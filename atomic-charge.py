@@ -13,9 +13,8 @@ def parse(msg):
     returns (yieldwise): (id, msg) # :D
     """
     while msg:
-        # "..PWP messages are encoded as a 4-byte big-endian number"
         assert len(msg) >= 4
-        msglen = struct.unpack('>I', msg[:4])
+        msglen = struct.unpack('>I', msg[:4]) # "..PWP messages are encoded as a 4-byte big-endian number"
         if msglen == 0:
             # keep-alive, len 0
             yield (0, '')
@@ -26,12 +25,22 @@ def parse(msg):
             msg = msg[4+msglen:]
 
 def gen_handshake(meta):
+    """
+    unsigned first-byte value is the length of the string with the protocol name. len('BitTorrent protocol') == 19.
+    following 8 reserved bytes and infohash of .torrent-file. len(handshake) == 68byte
+    the handshake MUST be sent after a TCP connection has been established
+    """
     infohash = sha1(bencode.bencode(meta['info'])).digest()
-    return chr(19) + 'BitTorrent protocol' + chr(0)*8 + infohash #XXX why \19?
+    return chr(19) + 'BitTorrent protocol' + chr(0)*8 + infohash
 
 def gen_bitfield(meta):
     #XXX needs documentation
-    pieces = len(meta['info']['pieces']) / 20 #XXX why 20?
+    # freddy added some text. sufficient?!
+    """
+    each bit represents a piece. (high bit in the first byte is piece 0). we set them all to indicate having 100%
+    bitfield MUST be send after the handshake.
+    """
+    pieces = len(meta['info']['pieces']) / 20 # "pieces" contains a sha1-sum for each piece. thus, pieces_amount = len()/20
     num = int(math.ceil(pieces / 8.0))
     result = list('\xFF'*num)
     if pieces % 8:
