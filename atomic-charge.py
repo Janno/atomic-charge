@@ -95,7 +95,7 @@ if __name__ == '__main__':
     sock.connect((argv[3], int(argv[4])))
     sock.settimeout(2)
     print "connected"
-    id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8))
+    id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8)) #XXX what's -AC-?
 
     print 'id: ', id
     send(sock, gen_handshake(meta)+id + gen_message(5, gen_bitfield(meta)))
@@ -118,14 +118,13 @@ if __name__ == '__main__':
 
     for (msgid, msg) in parse(sock):
         printhex(msg, '<- %s: (%s)' % (str(msgid), pwp_dict[msgid]))
-        send(sock, gen_message(0))
+        send(sock, gen_message(0)) # Keep-alive
         print "keep alive sent"
-        if msgid == 4:  
+        #if msgid == 4:  
             #peerbitfield |= 1<< ( struct.pack('SOMETHINGSOMETHING',msg)[0] ) #FIXME
             #printhex(peerbitfield,"bitfield of peer updated: ")
         if msgid == 5:
-            print "got bitfield"
-            peerbitfield = msg
+            #peerbitfield = msg
             send(sock, gen_message(1))
             print "unchoke sent"
         if msgid == 6:
