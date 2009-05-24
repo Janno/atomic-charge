@@ -95,7 +95,7 @@ if __name__ == '__main__':
     sock.connect((argv[3], int(argv[4])))
     sock.settimeout(2)
     print "connected"
-    id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8)) #XXX what's -AC-?
+    id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8)) #XXX what's -AC- btw?
 
     print 'id: ', id
     send(sock, gen_handshake(meta)+id + gen_message(5, gen_bitfield(meta)))
@@ -112,19 +112,21 @@ if __name__ == '__main__':
             exit()
 
     pwp_dict = {0:'Choke',1:'Unchoke',
-2:'Interested',3:'Uninterested',
-4:'Have',5:'Bitfield',6:'Request',
-7:'Piece',8:'Cancel'}
+                2:'Interested',3:'Uninterested',
+                4:'Have',5:'Bitfield',6:'Request',
+                7:'Piece',8:'Cancel'}
 
     for (msgid, msg) in parse(sock):
-        printhex(msg, '<- %s: (%s)' % (str(msgid), pwp_dict[msgid]))
+        printhex(msg, '<- %s: (%s) ' % (str(msgid), pwp_dict[msgid]))
         send(sock, gen_message(0)) # Keep-alive
         print "keep alive sent"
-        #if msgid == 4:  
-            #peerbitfield |= 1<< ( struct.pack('SOMETHINGSOMETHING',msg)[0] ) #FIXME
-            #printhex(peerbitfield,"bitfield of peer updated: ")
+        if msgid == 4:  
+            msg_int = sum(256**i * ord(c) for i, c in enumerate(reversed(msg)))
+            peerbitfield |= 1<<msg_int # update bitfield #FIXME somehow it's not always \xFF*pieces when finished
+            print 'bitfield updated' #FIXME make a beauty string of it...
         if msgid == 5:
-            #peerbitfield = msg
+            msg_int = sum(256**i * ord(c) for i, c in enumerate(reversed(msg)))
+            peerbitfield = msg_int
             send(sock, gen_message(1))
             print "unchoke sent"
         if msgid == 6:
