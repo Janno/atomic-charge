@@ -111,13 +111,21 @@ if __name__ == '__main__':
             print "gibberish, exiting!"
             exit()
 
+    pwp_dict = {0:'Choke',1:'Unchoke',
+2:'Interested',3:'Uninterested',
+4:'Have',5:'Bitfield',6:'Request',
+7:'Piece',8:'Cancel'}
 
     for (msgid, msg) in parse(sock):
-        printhex(msg, '<- %s: ' % str(msgid))
+        printhex(msg, '<- %s: (%s)' % (str(msgid), pwp_dict[msgid]))
         send(sock, gen_message(0))
         print "keep alive sent"
+        if msgid == 4:  
+            #peerbitfield |= 1<< ( struct.pack('SOMETHINGSOMETHING',msg)[0] ) #FIXME
+            #printhex(peerbitfield,"bitfield of peer updated: ")
         if msgid == 5:
             print "got bitfield"
+            peerbitfield = msg
             send(sock, gen_message(1))
             print "unchoke sent"
         if msgid == 6:
