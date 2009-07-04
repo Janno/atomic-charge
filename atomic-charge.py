@@ -78,6 +78,20 @@ def printhex(msg, prefix=''):
 def abs2rel(index, offset):
     pass
 
+def sendpiece(meta,sock,piece,offset,length):
+    print "got request", piece, offset, length
+    print piece, offset, length
+    if singlefile:
+        f = file(argv[2], 'rb')
+        print "offset: %s" % (piece*meta['info']['piece length']+offset)
+        f.seek(piece*meta['info']['piece length']+offset)
+        content = f.read(length)
+        print "content length: %s" % len(content)
+        send(sock, gen_message(7, struct.pack('>II', piece, offset)+content), True)
+        print "sent piece"
+        f.close()
+
+
 if __name__ == '__main__':
     from sys import argv
     print argv
@@ -102,7 +116,7 @@ if __name__ == '__main__':
     sock.connect((argv[3], int(argv[4])))
     sock.settimeout(2)
     print "connected"
-    id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8)) #XXX what's -AC- btw?
+    id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8)) #AC is our client-"ID", of course..
 
     print 'id: ', id
     send(sock, gen_handshake(meta)+id + gen_message(5, gen_bitfield(meta)))
@@ -138,17 +152,7 @@ if __name__ == '__main__':
             print "unchoke sent"
         if msgid == 6:
             piece, offset, length = struct.unpack('>III', msg)
-            print "got request", piece, offset, length
-            print piece, offset, length
-            if singlefile:
-                f = file(argv[2], 'rb')
-                print "offset: %s" % (piece*meta['info']['piece length']+offset)
-                f.seek(piece*meta['info']['piece length']+offset)
-                content = f.read(length)
-                print "content length: %s" % len(content)
-                send(sock, gen_message(7, struct.pack('>II', piece, offset)+content), True)
-                print "sent piece"
-                f.close()
+            sendpiece(meta,sock,piece,offset,length)
         if msgid == 3:
             print "received not interested"
             print "exiting"

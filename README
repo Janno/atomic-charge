@@ -1,3 +1,3 @@
-atomic-charger
-atomic-charger is supposed to be a seeding-only bittorrent-client.
-given only a .torrent-file, the downloaded data and the IP/Port of a friend atomic-charger will help your friend downloading the torrent by serving files
+atomic-charge
+atomic-charge is supposed to be a seeding-only bittorrent-client.
+given only a .torrent-file, the downloaded data and the IP/Port of a friend atomic-charge will help your friend downloading the torrent by serving files
