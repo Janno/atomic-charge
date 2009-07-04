@@ -118,7 +118,7 @@ if __name__ == '__main__':
 
     for (msgid, msg) in parse(sock):
         printhex(msg, '<- %s: (%s) ' % (str(msgid), pwp_dict[msgid]))
-        send(sock, gen_message(0)) # Keep-alive
+        #send(sock, gen_message(0)) # Keep-alive
         print "keep alive sent"
         if msgid == 4:  
             msg_int = sum(256**i * ord(c) for i, c in enumerate(reversed(msg)))
@@ -130,8 +130,8 @@ if __name__ == '__main__':
             send(sock, gen_message(1))
             print "unchoke sent"
         if msgid == 6:
-            print "got request"
             piece, offset, length = struct.unpack('>III', msg)
+            print "got request", piece, offset, length
             print piece, offset, length
             if singlefile:
                 f = file(argv[2], 'rb')
