@@ -109,7 +109,7 @@ if __name__ == '__main__':
     sock.connect((argv[3], int(argv[4])))
     sock.settimeout(2)
     print "connected"
-    id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8)) #XXX what's -AC- btw?
+    id = '-AC-'+''.join('%2X' % random.choice(xrange(255)) for x in xrange(8)) #AC is our client-"ID", of course..
 
     print 'id: ', id
     send(sock, gen_handshake(meta)+id + gen_message(5, gen_bitfield(meta)))
