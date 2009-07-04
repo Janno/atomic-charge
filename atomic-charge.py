@@ -7,6 +7,7 @@ import struct
 import math
 import random
 import bencode
+import os
 
 def parse(sock):
     """
@@ -90,6 +91,12 @@ if __name__ == '__main__':
     print meta['info'].keys()
     singlefile = ('length' in meta['info'].keys())
     print ("single-file" if singlefile else "multi-file") + " torrent"
+    if singlefile:
+       files = [argv[2]]
+    else:
+       files = [os.path.join(argv[2], '/'.join(file['path'])) for file in meta['info']['files']]
+       print "files: ", files
+    
     
     sock = socket.socket()
     sock.connect((argv[3], int(argv[4])))
