@@ -119,7 +119,7 @@ if __name__ == '__main__':
     for (msgid, msg) in parse(sock):
         printhex(msg, '<- %s: (%s) ' % (str(msgid), pwp_dict[msgid]))
         #send(sock, gen_message(0)) # Keep-alive
-        print "keep alive sent"
+        #print "keep alive sent"
         if msgid == 4:  
             msg_int = sum(256**i * ord(c) for i, c in enumerate(reversed(msg)))
             peerbitfield |= 1<<msg_int # update bitfield #FIXME somehow it's not always \xFF*pieces when finished
