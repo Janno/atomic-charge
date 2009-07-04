@@ -77,6 +77,20 @@ def printhex(msg, prefix=''):
 def abs2rel(index, offset):
     pass
 
+def sendpiece(meta,sock,piece,offset,length):
+    print "got request", piece, offset, length
+    print piece, offset, length
+    if singlefile:
+        f = file(argv[2], 'rb')
+        print "offset: %s" % (piece*meta['info']['piece length']+offset)
+        f.seek(piece*meta['info']['piece length']+offset)
+        content = f.read(length)
+        print "content length: %s" % len(content)
+        send(sock, gen_message(7, struct.pack('>II', piece, offset)+content), True)
+        print "sent piece"
+        f.close()
+
+
 if __name__ == '__main__':
     from sys import argv
     print argv
@@ -131,17 +145,7 @@ if __name__ == '__main__':
             print "unchoke sent"
         if msgid == 6:
             piece, offset, length = struct.unpack('>III', msg)
-            print "got request", piece, offset, length
-            print piece, offset, length
-            if singlefile:
-                f = file(argv[2], 'rb')
-                print "offset: %s" % (piece*meta['info']['piece length']+offset)
-                f.seek(piece*meta['info']['piece length']+offset)
-                content = f.read(length)
-                print "content length: %s" % len(content)
-                send(sock, gen_message(7, struct.pack('>II', piece, offset)+content), True)
-                print "sent piece"
-                f.close()
+            sendpiece(meta,sock,piece,offset,length)
         if msgid == 3:
             print "received not interested"
             print "exiting"
