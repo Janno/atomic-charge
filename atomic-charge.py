@@ -132,10 +132,16 @@ if __name__ == '__main__':
             print "gibberish, exiting!"
             exit()
 
+    print 'unchoking'
+
+    send(sock, gen_message(1))
+
     pwp_dict = {0:'Choke',1:'Unchoke',
                 2:'Interested',3:'Uninterested',
                 4:'Have',5:'Bitfield',6:'Request',
                 7:'Piece',8:'Cancel'}
+
+    peerbitfield = 0
 
     for (msgid, msg) in parse(sock):
         printhex(msg, '<- %s: (%s) ' % (str(msgid), pwp_dict[msgid]))
