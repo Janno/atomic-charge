@@ -19,12 +19,15 @@ def makeId(prefix='-AC-'):
 class Charger(object):
     def __init__(self, torrentFile, location, remoteAddr, remotePort):
         self.torrent = Torrent(torrentFile)
+        files = []
+        sizesDict = {}
         if self.torrent.isSingleFile():
             # location must be an existing file
             assert os.path.isfile(location)
             if self.torrent.meta['info']['name'] != os.path.split(location)[1]:
                 print 'Warning: provided file name differs from file name in torrent'
-            self.fileManager = FileManager([location])
+            files = [location]
+            sizesDict[location] = self.torrent.meta['info']['length']
         else:
             # location must a directory
             # assumption: the directory that usually contains all
@@ -32,16 +35,18 @@ class Charger(object):
             # this allows for renamed top-level directories
             assert os.path.isdir(location)
             files = []
-            sizes = []
             for fileInfo in self.torrent.meta['info']['files']:
-                files.append(os.path.join(location, fileInfo['path']))
-                sizes.append(fileInfo['length'])
-            self.fileManager = FileManager(files)
-            if not self.fileManager.checkFileSizes(sizes):
-                print 'Warning: not all file sizes match those in the torrent'
+                files.append(os.path.join(location, *fileInfo['path']))
+                sizesDict[files[-1]] = fileInfo['length']
+
+        self.fileManager = FileManager(files)
+        if self.fileManager.checkFileSizes(sizesDict):
+            print 'Warning: not all file sizes match those in the torrent'
+
 
         self.socket = socket.socket()
-        self.socket.settimeout(2)
+        #self.socket.settimeout(1)
+        self.socket.setblocking(1)
         self.addr = (remoteAddr, remotePort)
         self.id = makeId() 
 
@@ -52,7 +57,13 @@ class Charger(object):
         self.socket.sendall(data)
 
     def recv(self, length):
-        return self.socket.recv(length)
+        data = ""
+        counter = 0
+        while counter < length:
+            tmp = self.socket.recv(length-counter)
+            data += tmp
+            counter += len(tmp)
+        return data
 
     def sendMsg(self, msgId, msg=""):
         packet = ""
@@ -71,12 +82,13 @@ class Charger(object):
         pos = pieceLen * piece + offset
         data = self.fileManager.read(pos, length)
         msg = struct.pack('>II', piece, offset) + data
+        print 'Debug: sendPiece %s %s %s' % (piece, offset, length)
         self.sendMsg(7,msg)
 
     def sendHandshake(self):
         """Initializes communication with the peer"""
         print 'Debug: sending handshake'
-        infohash = sha1(bencode.bencode(self.torrent.meta['info'])).digest()
+        infohash = self.torrent.getInfoHash() 
         self.send(chr(19) + 'BitTorrent protocol' + chr(0)*8 + infohash + self.id)
 
     def sendBitField(self):
@@ -94,16 +106,20 @@ class Charger(object):
 
     def receiveMsg(self):
         lenEnc = self.recv(4)
-        length = struct.unpack('>I', lenEnc)[0]
-        if length > 0:
-            data = self.recv(length)
-            msgId, msg = struct.unpack('>B', data[0])[0], data[1:]
-            print 'Debug: received message with ID %s' % msgId
-            return (msgId, msg)
+        if len(lenEnc) != 4:
+            print 'Debug: could not read packet length. %s' % len(lenEnc)
+            raise socket.error()
         else:
-            # keep-alive, no data
-            print 'Debug: received keep-alive'
-            return ('0', '')
+            length = struct.unpack('>I', lenEnc)[0]
+            if length > 0:
+                data = self.recv(length)
+                msgId, msg = struct.unpack('>B', data[0])[0], data[1:]
+                print 'Debug: received message with ID %s' % msgId
+                return (msgId, msg)
+            else:
+                # keep-alive, no data
+                print 'Debug: received keep-alive'
+                return ('0', '')
 
     def receiveLoop(self):
         while True:
@@ -112,17 +128,20 @@ class Charger(object):
             except:
                 import traceback
                 traceback.print_exc()
-                continue
+                break
             if msgId == 6:
                 piece, offset, length = struct.unpack('>III', msg)
                 self.sendPiece(piece, offset, length)
+            if msgId == 3:
+                print 'Debug: peer not interested, exiting'
+                break
 
 
     def begin(self):
         self.connect()
         self.sendHandshake()
-        self.sendBitField()
         self.receiveHandshake()
+        self.sendBitField()
         self.unChoke()
         self.receiveLoop()
 
@@ -154,6 +173,8 @@ class Torrent(object):
             result[-1] = chr(ord(result[-1]) ^ (2**(8 - (pieces % 8))) - 1)
         return ''.join(result)
 
+    def getInfoHash(self):
+        return sha1(bencode.bencode(self.meta['info'])).digest()
 
 class FileManager(object):
     """Manages all file access for both single-file
@@ -169,12 +190,13 @@ class FileManager(object):
         self.handles = dict([(fname, None) for fname in self.fileNames])
 
 
-    def checkFileSizes(self, sizes):
-        """Order matters!!!"""
-        for s1,s2 in zip(sizes, self.fileSizes.itervalues()):
+    def checkFileSizes(self, sizesDict):
+        result = []
+        for fname, s1 in sizesDict.iteritems():
+            s2 = self.fileSizes[fname]
             if s1 != s2:
-                return false
-        return true
+                result.append(fname)
+        return result
 
         
     def openFile(self, fname):
@@ -194,7 +216,8 @@ class FileManager(object):
         if (pos > sum(self.fileSizes.itervalues())):
             raise IndexError("pos is larger than combined size of all files")
         akku = 0
-        for fname, size in self.fileSizes.iteritems():
+        for fname in self.fileNames:
+            size = self.fileSizes[fname]
             if pos < (akku + size):
                 return (fname, pos-akku, akku + size - pos)
             akku += size
@@ -206,8 +229,10 @@ class FileManager(object):
         totalBytesRead = 0
         while totalBytesRead < length:
             fname, offset, bytesLeft = self.abs2rel(pos + totalBytesRead)
-            bytesToRead = min(length, bytesLeft)
-            data += self.getHandle(fname).read(bytesToRead)
+            handle = self.getHandle(fname)
+            bytesToRead = min(length-totalBytesRead, bytesLeft)
+            handle.seek(offset)
+            data += handle.read(bytesToRead)
             totalBytesRead += bytesToRead
         return data
 
@@ -227,5 +252,15 @@ if __name__ == '__main__':
     port = int(argv[4])
 
     con = Charger(torrent, location, addr, port)
+    info = con.torrent.meta['info']
+    print info 
+    plen = info['piece length']
+    for i in xrange(len(info['pieces'])/20 - 1):
+        piece = con.fileManager.read(i * plen, 2**14)
+        piece += con.fileManager.read(i * plen + 2**14, 2**14)
+        print sha1(piece).hexdigest() 
+        print ''.join(['%02X' % (ord(c)) for c in info['pieces'][20*i:20*(i+1)]])
+        print '---'
+
     con.begin()
 
