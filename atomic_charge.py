@@ -1,13 +1,14 @@
 #!/usr/bin/python
 
+import bencode
+
 from hashlib import sha1
 import socket
-from string import printable
 import struct
+
+import os.path
 import math
 import random
-import bencode
-import os
 
 def makeId(prefix='-AC-'):
     result = prefix
