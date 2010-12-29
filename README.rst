@@ -14,6 +14,21 @@ the file from your uplink *and* the swarm.  All you need for this to work is a
 common torrent file, its finished files, your friend's IP and her listening
 port.
 
+Example:
+
+* You download ``beach_party.torrent``, containing ``beachparty.avi``.
+* Your friend expresses interest in the file.
+* Your friend connects to the torrent, downloading the file *with the same speed*
+  as you did.
+* Your friend tells you his torrent client is listening on the default port,
+  6881, from his IP 10.11.12.13.
+* You start charging your friend::
+
+    ./atomic_charge.py beach_party.torrent beachparty.avi 10.11.12.13 6881
+
+* Your friend receives the file much faster.  Yay!
+
+
 The unfair game resulting from this behaviour stems directly from a flaw in the
 torrent protocol:  peers announce their download status to other peers in a
 private connection.  The swarm does not necessarily receive full, let alone
