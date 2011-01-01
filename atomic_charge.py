@@ -10,6 +10,14 @@ import os.path
 import math
 import random
 
+
+from itertools import izip_longest
+
+def grouper(n, iterable, padvalue=None):
+    "grouper(3, 'abcdefg', 'x') --> ('a','b','c'), ('d','e','f'), ('g','x','x')"
+    return izip_longest(*[iter(iterable)]*n, fillvalue=padvalue)
+
+
 def makeId(prefix='-AC-'):
     result = prefix
     for x in xrange(8):
@@ -18,19 +26,30 @@ def makeId(prefix='-AC-'):
 
 
 class Charger(object):
-    def __init__(self, torrentFile, location, remoteAddr, remotePort):
+    def __init__(self, torrentFile, location, remoteAddr, remotePort, hashCheck=True):
         self.torrent = Torrent(torrentFile)
         files = []
         sizesDict = {}
         if self.torrent.isSingleFile():
-            # location must be an existing file
-            assert os.path.isfile(location)
+            # if location is a file, it must 
+            # be the actual file to be used
+            # if it's not, it must be a directory
+            # containing the file to be used
+            if not os.path.isfile(location):
+                if not os.path.isdir(location):
+                    print 'Critical: You must either specify a file or a directory which contains the target file'
+                    exit()
+                location = os.path.join(location, self.torrent.meta['info']['name'])
+                if not os.path.isfile(location):
+                    print 'Critical: The directory you specified does not contain the target file %s'
+                    exit()
+
             if self.torrent.meta['info']['name'] != os.path.split(location)[1]:
                 print 'Warning: provided file name differs from file name in torrent'
             files = [location]
             sizesDict[location] = self.torrent.meta['info']['length']
         else:
-            # location must a directory
+            # location must be a directory
             # assumption: the directory that usually contains all
             # the torrent's files IS the given directory.
             # this allows for renamed top-level directories
@@ -44,6 +63,12 @@ class Charger(object):
         if self.fileManager.checkFileSizes(sizesDict):
             print 'Warning: not all file sizes match those in the torrent'
 
+        if hashCheck:
+            self.setLocalBitField()
+        else:
+            self.localBitField = BitField(self.torrent.numPieces, complete=True)
+
+        self.remoteBitField = BitField(self.torrent.numPieces, complete=False)
 
         self.socket = socket.socket()
         #self.socket.settimeout(1)
@@ -79,7 +104,7 @@ class Charger(object):
 
     def sendPiece(self, piece, offset, length):
         """Message ID 7"""
-        pieceLen = self.torrent.meta['info']['piece length']
+        pieceLen = self.torrent.pieceLength
         pos = pieceLen * piece + offset
         data = self.fileManager.read(pos, length)
         msg = struct.pack('>II', piece, offset) + data
@@ -92,13 +117,34 @@ class Charger(object):
         infohash = self.torrent.getInfoHash() 
         self.send(chr(19) + 'BitTorrent protocol' + chr(0)*8 + infohash + self.id)
 
+    def setLocalBitField(self):
+        pieces = []
+        for n in xrange(self.torrent.numPieces):
+            pieceData = self.fileManager.read(
+                    n * self.torrent.pieceLength, 
+                    min(self.torrent.pieceLength,
+                        self.torrent.length - n*(self.torrent.pieceLength)
+                        )
+                    )
+            if sha1(pieceData).digest() == self.torrent.hashes[n]:
+                pieces.append(n)
+        self.localBitField = BitField(self.torrent.numPieces, pieces=pieces, complete=False)
+        
+    def setRemoteBitField(self, string):
+        pieces = []
+        for i, char in enumerate(string):
+            ordi = ord(char)
+            pieces.extend(map(lambda x: x+n, filter(lambda x: ordi & 1<<x, [x for x in xrange(8)])))
+        self.remoteBitField = BitField(self, pieces=pieces, complete=False)
+
+
     def sendBitField(self):
         """Message ID 5, MUST be sent immediately after the handshake"""
-        self.sendMsg(5, self.torrent.genFullBitField())
+        self.sendMsg(5, str(self.localBitField))
 
     def receiveHandshake(self):
         data = self.recv(68)
-        print 'Debug: received handshake:\n%s' % data
+        print 'Debug: received handshake:\n%s' % data.encode('hex')
         # TODO sanity check
 
     def unChoke(self):
@@ -131,12 +177,21 @@ class Charger(object):
                 traceback.print_exc()
                 break
             if msgId == 6:
+                # Request
                 piece, offset, length = struct.unpack('>III', msg)
                 self.sendPiece(piece, offset, length)
             if msgId == 3:
+                # Uninterested
                 print 'Debug: peer not interested, exiting'
                 break
-
+            if msgId == 5:
+                # BitField
+                self.setRemoteBitField(msg)
+            if msgId == 4:
+                # Have
+                piece, = struct.unpack('>I', msg)
+                self.remoteBitField.enable(piece)
+                print 'Debug:', self.remoteBitField
 
     def begin(self):
         self.connect()
@@ -147,7 +202,36 @@ class Charger(object):
         self.receiveLoop()
 
 
-         
+
+
+
+class BitField(object):
+    def __init__(self, size, complete=False, pieces=[]):
+        """Initializes the bit field. If complete==False,
+        every integer < size in pieces is treated as
+        a piece that should be toggled on in the bit
+        field. If complete==True, every piece contained
+        in pieces is disabled."""
+        self.size = size
+        self.bitString = [1 if complete else 0]*size
+
+        for piece in pieces:
+            self.bitString[piece] ^= 1
+
+    def enable(self, piece):
+        self.bitString[piece] = 1
+
+    def disable(self, piece):
+        self.bitString[piece] = 0
+
+    def __str__(self):
+        result = ''
+        for bits in grouper(8, self.bitString, 0):
+            result += chr(int(''.join(map(str, bits)), 2))
+        return result
+
+    def __repr__(self):
+        return repr(self.bitString)
 
 class Torrent(object):
     def __init__(self, torrentFile):
@@ -156,6 +240,15 @@ class Torrent(object):
                os.path.isfile(self.torrentFile)
         f = file(self.torrentFile, 'rb')
         self.meta = bencode.bdecode(f.read())
+        self.hashes = map(''.join, list(grouper(20, self.meta['info']['pieces'], '0')))
+        self.numPieces = len(self.meta['info']['pieces'])/20
+        self.pieceLength = self.meta['info']['piece length']
+
+        if self.isSingleFile():
+            self.length = self.meta['info']['length']
+        else:
+            self.length = sum(map(lambda x: x['length'], self.meta['info']['files']))
+
         f.close()
 
     def isSingleFile(self):
@@ -167,7 +260,7 @@ class Torrent(object):
         """
         # meta['pieces'] contains a sha1-sum for each piece. 
         # thus, pieces_amount = len()/20
-        pieces = len(self.meta['info']['pieces']) / 20
+        pieces = self.numPieces
         num = int(math.ceil(pieces / 8.0))
         result = list('\xFF'*num)
         if pieces % 8:
@@ -176,6 +269,7 @@ class Torrent(object):
 
     def getInfoHash(self):
         return sha1(bencode.bencode(self.meta['info'])).digest()
+
 
 class FileManager(object):
     """Manages all file access for both single-file
@@ -225,7 +319,7 @@ class FileManager(object):
     
     def read(self, pos, length):
         if (pos+length > sum(self.fileSizes.itervalues())):
-            raise IndexError("pos is larger than combined size of all files")
+            raise IndexError("pos+length is larger than combined size of all files")
         data = ""
         totalBytesRead = 0
         while totalBytesRead < length:
@@ -253,15 +347,5 @@ if __name__ == '__main__':
     port = int(argv[4])
 
     con = Charger(torrent, location, addr, port)
-    info = con.torrent.meta['info']
-    print info 
-    plen = info['piece length']
-    for i in xrange(len(info['pieces'])/20 - 1):
-        piece = con.fileManager.read(i * plen, 2**14)
-        piece += con.fileManager.read(i * plen + 2**14, 2**14)
-        print sha1(piece).hexdigest() 
-        print ''.join(['%02X' % (ord(c)) for c in info['pieces'][20*i:20*(i+1)]])
-        print '---'
-
     con.begin()
 
