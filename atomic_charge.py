@@ -333,8 +333,7 @@ class FileManager(object):
 
 
         
-
-if __name__ == '__main__':
+def main():
     from sys import argv
     if len(argv) != 5:
         print 'Could not parse parameters.'
@@ -349,3 +348,6 @@ if __name__ == '__main__':
     con = Charger(torrent, location, addr, port)
     con.begin()
 
+
+if __name__ == '__main__':
+    main()
