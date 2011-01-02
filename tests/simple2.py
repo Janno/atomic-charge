@@ -6,13 +6,15 @@ try:
 except ImportError:
     raise ImportError("please install python-libtorrent-rasterbar")
 
-import thread
+import threading
 import time
 import os
 import tempfile
 
 class SingleFileTest2(unittest.TestCase):
     TORRENT = "single2.torrent"
+    TIMEOUT = 30
+    STEP = 1
     @property
     def torrent(self):
         return os.path.join(os.path.dirname(__file__), self.TORRENT)
@@ -25,22 +27,34 @@ class SingleFileTest2(unittest.TestCase):
         self.transfer = session.add_torrent(info, tempfile.gettempdir())
 
     def test_transfer(self):
-        thread.start_new_thread(self.charge, ())
-        time.sleep(1)
+        charge_func = self.charge
+        class ChargeThread(threading.Thread):
+            def run(self):
+                charge_func()
+        ChargeThread().run()
+        timeout = self.TIMEOUT
+        while timeout > 0:
+            if self.transfer.is_seed() \
+                    or self.transfer.status().state in (4, 5):
+                break
+            timeout -= self.STEP
+            time.sleep(self.STEP)
+
         assert self.transfer.is_seed() \
-            or self.transfer.status().state in (3, 4, 5)
+            or self.transfer.status().state in (4, 5)
                                 # downloading, finished, or seeding
         self.transfer.pause()
 
     def charge(self):
         charger = atomic_charge.Charger(self.torrent,
                 os.path.join(os.path.dirname(__file__), "seed", "lorem2.txt"),
-                                        "localhost", 6883)
+                                        "localhost", self.session.listen_port())
         charger.begin()
 
     def tearDown(self):
         for entry in self.transfer.get_torrent_info().files():
             os.remove(os.path.join(tempfile.gettempdir(), entry.path))
+        del self.session
 
 
 if __name__ == '__main__':
